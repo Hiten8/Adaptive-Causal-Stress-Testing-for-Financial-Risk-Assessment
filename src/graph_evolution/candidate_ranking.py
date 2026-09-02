@@ -952,40 +952,320 @@ class CandidateRankingEngine:
 
         return False
 
+
     def _get_change_consistency(
         self,
         candidate: Any,
         base_state: Any,
-        primary_changes: List[Dict]
+        primary_changes: Optional[List[Dict]]
     ) -> float:
+        """
+        Measure how consistently a candidate graph implements the
+        detected primary changes.
+
+        Each primary change is evaluated independently.
+
+        A candidate receives credit only when the corresponding
+        structural
+        change is actually represented in the candidate graph.
+
+        The final score is:
+
+            Change Consistency =
+                satisfied_primary_changes
+                /
+                total_primary_changes
+
+        Therefore:
+
+            all changes satisfied -> 1.0
+            3 / 4 satisfied       -> 0.75
+            2 / 4 satisfied       -> 0.50
+            1 / 4 satisfied       -> 0.25
+            0 / 4 satisfied       -> 0.00
+
+        This deliberately evaluates the actual identity of each
+        primary change rather than merely counting the number of
+        structural operations performed by the candidate.
+        """
 
         if not primary_changes:
+
             return 1.0
 
-        satisfied = 0
-
-        normalized_changes = [
-            self._normalize_primary_change(
-                change
-            )
-            for change in primary_changes
-        ]
-
-        for change in normalized_changes:
-            if self._change_is_satisfied(
-                change,
-                candidate,
-                base_state
-            ):
-                satisfied += 1
-
-        return self._clamp(
-            satisfied
-            /
-            len(
-                normalized_changes
-            )
+        base_graph = (
+            base_state.graph
         )
+
+        candidate_graph = (
+            candidate.graph
+        )
+
+        satisfied_changes = 0
+
+        total_changes = len(
+            primary_changes
+        )
+
+        for change in primary_changes:
+
+            if not isinstance(
+                change,
+                dict
+            ):
+
+                continue
+
+            change_type = (
+                change.get(
+                    "type"
+                )
+            )
+
+            # ======================================================
+            # EDGE ADDITION
+            # ======================================================
+
+            if change_type == "EDGE_ADDITION":
+
+                edge = (
+                    change.get(
+                        "edge"
+                    )
+                )
+
+                if (
+                    edge is not None
+                    and
+                    candidate_graph.has_edge(
+                        edge[0],
+                        edge[1]
+                    )
+                    and
+                    not base_graph.has_edge(
+                        edge[0],
+                        edge[1]
+                    )
+                ):
+
+                    satisfied_changes += 1
+
+            # ======================================================
+            # EDGE REMOVAL
+            # ======================================================
+
+            elif change_type == "EDGE_REMOVAL":
+
+                edge = (
+                    change.get(
+                        "edge"
+                    )
+                )
+
+                if (
+                    edge is not None
+                    and
+                    base_graph.has_edge(
+                        edge[0],
+                        edge[1]
+                    )
+                    and
+                    not candidate_graph.has_edge(
+                        edge[0],
+                        edge[1]
+                    )
+                ):
+
+                    satisfied_changes += 1
+
+            # ======================================================
+            # WEIGHT CHANGE
+            # ======================================================
+
+            elif change_type in (
+                "WEIGHT_CHANGE",
+                "WEIGHT_CHANGED"
+            ):
+
+                edge = (
+                    change.get(
+                        "edge"
+                    )
+                )
+
+                if (
+                    edge is None
+                    or
+                    not base_graph.has_edge(
+                        edge[0],
+                        edge[1]
+                    )
+                    or
+                    not candidate_graph.has_edge(
+                        edge[0],
+                        edge[1]
+                    )
+                ):
+
+                    continue
+
+                old_weight = (
+                    change.get(
+                        "old_weight"
+                    )
+                )
+
+                new_weight = (
+                    change.get(
+                        "new_weight"
+                    )
+                )
+
+                candidate_old_weight = (
+                    base_graph[
+                        edge[0]
+                    ][
+                        edge[1]
+                    ].get(
+                        "weight"
+                    )
+                )
+
+                candidate_new_weight = (
+                    candidate_graph[
+                        edge[0]
+                    ][
+                        edge[1]
+                    ].get(
+                        "weight"
+                    )
+                )
+
+                old_matches = (
+                    self._weights_equal(
+                        candidate_old_weight,
+                        old_weight
+                    )
+                )
+
+                new_matches = (
+                    self._weights_equal(
+                        candidate_new_weight,
+                        new_weight
+                    )
+                )
+
+                if (
+                    old_matches
+                    and
+                    new_matches
+                ):
+
+                    satisfied_changes += 1
+
+            # ======================================================
+            # ISOLATED NODE
+            # ======================================================
+
+            elif change_type == "ISOLATED_NODE":
+
+                node = (
+                    change.get(
+                        "node"
+                    )
+                )
+
+                if node is None:
+
+                    continue
+
+                # The primary change says that this node became
+                # isolated in the newly observed/current state.
+                #
+                # A candidate consistently implementing that change
+                # should preserve the node's isolated state unless
+                # the candidate explicitly proposes a recovery
+                # action for that node.
+                #
+                # Therefore:
+                #
+                #     Base graph connected
+                #     Candidate graph isolated
+                #
+                # is considered a direct implementation of the
+                # detected isolation change.
+
+                base_degree = (
+                    base_graph.degree(
+                        node
+                    )
+                    if node in base_graph
+                    else 0
+                )
+
+                candidate_degree = (
+                    candidate_graph.degree(
+                        node
+                    )
+                    if node in candidate_graph
+                    else 0
+                )
+
+                if (
+                    base_degree > 0
+                    and
+                    candidate_degree == 0
+                ):
+
+                    satisfied_changes += 1
+
+            # ======================================================
+            # UNKNOWN CHANGE TYPE
+            # ======================================================
+
+            else:
+
+                continue
+
+        return (
+            satisfied_changes
+            /
+            total_changes
+        )
+    # def _get_change_consistency(
+    #     self,
+    #     candidate: Any,
+    #     base_state: Any,
+    #     primary_changes: List[Dict]
+    # ) -> float:
+
+    #     if not primary_changes:
+    #         return 1.0
+
+    #     satisfied = 0
+
+    #     normalized_changes = [
+    #         self._normalize_primary_change(
+    #             change
+    #         )
+    #         for change in primary_changes
+    #     ]
+
+    #     for change in normalized_changes:
+    #         if self._change_is_satisfied(
+    #             change,
+    #             candidate,
+    #             base_state
+    #         ):
+    #             satisfied += 1
+
+    #     return self._clamp(
+    #         satisfied
+    #         /
+    #         len(
+    #             normalized_changes
+    #         )
+    #     )
 
     # Criterion 3
     # Graph Stability
@@ -2204,91 +2484,185 @@ if __name__ == "__main__":
         decision,
         dict
     ):
-        primary_changes = decision.get(
-            "PrimaryChanges",
-            []
+        detected_changes = (
+            decision.get(
+                "DetectedChanges",
+                {}
+            )
         )
 
-        if not primary_changes:
-            added_edges = (
-                decision.get(
-                    "AddedEdges",
-                    []
-                )
+        if not isinstance(
+            detected_changes,
+            dict
+        ):
+            raise TypeError(
+                "decision['DetectedChanges'] "
+                "must be a dictionary."
             )
 
-            removed_edges = (
-                decision.get(
-                    "RemovedEdges",
-                    []
-                )
+        # Edge additions
+        for edge in detected_changes.get(
+            "AddedEdges",
+            []
+        ):
+
+            primary_changes.append(
+                {
+                    "type":
+                        "EDGE_ADDITION",
+
+                    "edge":
+                        edge
+                }
             )
 
-            weight_changed_edges = (
-                decision.get(
-                    "WeightChangedEdges",
-                    []
-                )
+        # Edge removals
+        for edge in detected_changes.get(
+            "RemovedEdges",
+            []
+        ):
+
+            primary_changes.append(
+                {
+                    "type":
+                        "EDGE_REMOVAL",
+
+                    "edge":
+                        edge
+                }
             )
 
-            isolated_nodes = (
-                decision.get(
-                    "IsolatedNodes",
-                    []
-                )
+        # Weight changes
+        for change in detected_changes.get(
+            "WeightChangedEdges",
+            []
+        ):
+
+            primary_changes.append(
+                {
+                    "type":
+                        "WEIGHT_CHANGE",
+
+                    "edge":
+                        change["edge"],
+
+                    "old_weight":
+                        change["old_weight"],
+
+                    "new_weight":
+                        change["new_weight"]
+                }
             )
 
-            for edge in added_edges:
-                primary_changes.append(
-                    {
-                        "type":
-                            "EDGE_ADDITION",
+        # Isolated nodes
+        for node in detected_changes.get(
+            "IsolatedNodes",
+            []
+        ):
 
-                        "edge":
-                            edge
-                    }
-                )
+            primary_changes.append(
+                {
+                    "type":
+                        "ISOLATED_NODE",
 
-            for edge in removed_edges:
-                primary_changes.append(
-                    {
-                        "type":
-                            "EDGE_REMOVAL",
-
-                        "edge":
-                            edge
-                    }
-                )
-
-            for edge in weight_changed_edges:
-                primary_changes.append(
-                    {
-                        "type":
-                            "WEIGHT_CHANGED",
-
-                        "edge":
-                            edge
-                    }
-                )
-
-            for node in isolated_nodes:
-                primary_changes.append(
-                    {
-                        "type":
-                            "ISOLATED_NODE",
-
-                        "node":
-                            node
-                    }
-                )
+                    "node":
+                        node
+                }
+            )
 
     elif isinstance(
         decision,
         list
     ):
+
         primary_changes = (
             decision
         )
+    #     primary_changes = decision.get(
+    #         "PrimaryChanges",
+    #         []
+    #     )
+
+    #     if not primary_changes:
+    #         added_edges = (
+    #             decision.get(
+    #                 "AddedEdges",
+    #                 []
+    #             )
+    #         )
+
+    #         removed_edges = (
+    #             decision.get(
+    #                 "RemovedEdges",
+    #                 []
+    #             )
+    #         )
+
+    #         weight_changed_edges = (
+    #             decision.get(
+    #                 "WeightChangedEdges",
+    #                 []
+    #             )
+    #         )
+
+    #         isolated_nodes = (
+    #             decision.get(
+    #                 "IsolatedNodes",
+    #                 []
+    #             )
+    #         )
+
+    #         for edge in added_edges:
+    #             primary_changes.append(
+    #                 {
+    #                     "type":
+    #                         "EDGE_ADDITION",
+
+    #                     "edge":
+    #                         edge
+    #                 }
+    #             )
+
+    #         for edge in removed_edges:
+    #             primary_changes.append(
+    #                 {
+    #                     "type":
+    #                         "EDGE_REMOVAL",
+
+    #                     "edge":
+    #                         edge
+    #                 }
+    #             )
+
+    #         for edge in weight_changed_edges:
+    #             primary_changes.append(
+    #                 {
+    #                     "type":
+    #                         "WEIGHT_CHANGED",
+
+    #                     "edge":
+    #                         edge
+    #                 }
+    #             )
+
+    #         for node in isolated_nodes:
+    #             primary_changes.append(
+    #                 {
+    #                     "type":
+    #                         "ISOLATED_NODE",
+
+    #                     "node":
+    #                         node
+    #                 }
+    #             )
+
+    # elif isinstance(
+    #     decision,
+    #     list
+    # ):
+    #     primary_changes = (
+    #         decision
+    #     )
 
     evolution_engine = (
         GraphEvolutionEngine()
