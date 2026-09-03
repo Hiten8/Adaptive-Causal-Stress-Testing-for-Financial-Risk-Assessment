@@ -1,0 +1,12 @@
+streamlit
+networkx
+matplotlib
+pandas
+numpy
+joblib
+yfinance
+tigramite
+hmmlearn
+xgboost
+openpyxl
+tqdm
