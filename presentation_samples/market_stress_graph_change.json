@@ -1,0 +1,12 @@
+{
+  "scenario_name": "Market-stress causal shift",
+  "purpose": "Presentation-only sample. The original data and saved causal states are not modified.",
+  "base_window_id": 9000,
+  "observed_window_id": 9001,
+  "changes": {
+    "remove_edge": ["GDP", "Liquidity"],
+    "add_edge": ["CreditSpread", "Volatility", 0.62],
+    "change_weight": ["Inflation", "CreditSpread", 0.94]
+  },
+  "talking_point": "During a stressed market regime, credit spreads directly amplify volatility, while GDP no longer provides the same liquidity support."
+}

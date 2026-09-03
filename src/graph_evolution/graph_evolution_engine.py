@@ -647,10 +647,7 @@ class GraphEvolutionEngine:
 
         print(
             "Primary Change Count : "
-            f"{detected_changes.get(
-                'PrimaryChangeCount',
-                'N/A'
-            )}"
+            f"{detected_changes.get('PrimaryChangeCount', 'N/A')}"
         )
 
     def _print_regime_profile(
@@ -791,29 +788,17 @@ if __name__ == "__main__":
         )
         print(
             f"Interaction Plan : "
-            f"{state.notes.get(
-                'InteractionPlan',
-                'N/A'
-            )}"
+            f"{state.notes.get('InteractionPlan', 'N/A')}"
         )
         print(
             f"Interaction Level : "
-            f"{state.notes.get(
-                'InteractionLevel',
-                'N/A'
-            )}"
+            f"{state.notes.get('InteractionLevel', 'N/A')}"
         )
         print(
             f"Cumulative Plausibility : "
-            f"{state.notes.get(
-                'InteractionPlanScore',
-                'N/A'
-            )}"
+            f"{state.notes.get('InteractionPlanScore', 'N/A')}"
         )
         print(
             f"Rule : "
-            f"{state.notes.get(
-                'PropagationRule',
-                'N/A'
-            )}"
+            f"{state.notes.get('PropagationRule', 'N/A')}"
         )
