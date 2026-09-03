@@ -882,6 +882,28 @@ interpret models.
 
 # Current Status
 
+## Stress-testing extensions
+
+The `src/stress_testing/` package provides the uncertainty-aware stages from
+the project plan:
+
+- `BootstrapCandidateGenerator` uses moving-block bootstrap resampling and
+  assigns candidate-graph probabilities from their observed frequencies.
+- `BootstrapChangeTest` calibrates an update threshold from stable-regime
+  bootstrap graphs and reports an empirical p-value for every proposed update.
+- `StressTestEngine` applies transparent linear SCM-style interventions to all
+  candidate graphs and reports a point estimate, probability-weighted expected
+  loss, and plausible worst-case loss.
+- `AdaptiveModelEvaluator` compares static, naive-adaptive, and gated-adaptive
+  policies using prediction error, update count, and false-update rate.
+- `AdaptiveUpdateWorkflow` combines the existing Change Gate with the
+  bootstrap significance test and produces an auditable update review. It does
+  not automatically overwrite the active graph.
+
+The existing Streamlit visualization can consume the resulting candidate
+states and audit records. A caller must explicitly persist the selected
+candidate through `ActiveGraphManager` after review.
+
 Implemented:
 
 - Change Gate

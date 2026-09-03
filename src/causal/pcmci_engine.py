@@ -22,8 +22,13 @@ PC_ALPHA = 0.05
 ALPHA_LEVEL = 0.05
 
 # PCMCI
-def run_pcmci(
-    window_csv,
+def run_pcmci(window_csv, window_metadata):
+    """Load a window CSV and run PCMCI on its observations."""
+    return run_pcmci_frame(pd.read_csv(window_csv), window_metadata)
+
+
+def run_pcmci_frame(
+    df: pd.DataFrame,
     window_metadata
 ):
     """
@@ -39,8 +44,8 @@ def run_pcmci(
     CausalState
     """
 
-    # Load Window
-    df = pd.read_csv(window_csv)
+    # Work on a copy because bootstrap callers reuse their source frame.
+    df = df.copy()
 
     # Remove metadata columns
     drop_columns = [
